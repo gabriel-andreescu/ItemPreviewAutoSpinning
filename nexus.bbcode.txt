@@ -1,6 +1,6 @@
 [size=4][color=#00ffff]OVERVIEW[/color][/size]
 Small SKSE plugin that automatically spins the inventory item preview (including the zoomed in version).
-Manually spinning the preview takes precedence.
+Manually spinning the preview takes precedence, dragging and letting go continues the rotation (see first two gifs).
 
 
 [size=4][color=#00ffff]COMPATIBILITY[/color][/size]
@@ -12,10 +12,12 @@ This started as a joke, but if you actually use/like it and run into issues, let
 [quote]Data\SKSE\Plugins\ItemPreviewAutoSpinning.ini[/quote]
 
 [list]
-[*]Automatic rotation speed. Default: 0.3.[/*]
-[*]Resume delay after manually spinning the preview. Default: 0.35 seconds.[/*]
+[*][b]Auto-spin speed[/b]: Controls the automatic preview spin. Negative values reverse the direction.[/*]
+[*][b]Resume delay[/b]: Controls how long auto-spin waits after you manually rotate the preview.[/*]
+[*][b]Release spin[/b]: Keeps the preview spinning briefly after you drag and let go.[/*]
+[*][b]Release spin duration[/b]: Controls how long the release spin takes to settle.[/*]
+[*][b]Release spin strength[/b]: Lets you make the release spin weaker or stronger.[/*]
 [/list]
-
 
 [size=4][color=#00ffff]REQUIREMENTS[/color][/size]
 SE/AE

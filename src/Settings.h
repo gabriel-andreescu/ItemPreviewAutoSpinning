@@ -36,7 +36,7 @@ public:
             rotationSpeed,
             "General",
             "fRotationSpeed",
-            "; Automatic rotation speed.\n; Valid range: 0-10.\n; Default: 0.3"
+            "; Automatic rotation speed. Negative values reverse direction.\n; Valid range: -10-10.\n; Default: 0.3"
         );
         get_value(
             ini,
@@ -67,7 +67,7 @@ public:
             "; Release spin strength multiplier.\n; Valid range: 0-3.\n; Default: 1"
         );
 
-        rotationSpeed = std::clamp(rotationSpeed, 0.0F, 10.0F);
+        rotationSpeed = std::clamp(rotationSpeed, -10.0F, 10.0F);
         resumeDelay = std::clamp(resumeDelay, 0.0F, 10.0F);
         manualSpinDuration = std::clamp(manualSpinDuration, 0.1F, 5.0F);
         manualSpinStrength = std::clamp(manualSpinStrength, 0.0F, 3.0F);

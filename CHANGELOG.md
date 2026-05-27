@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 - 2026-05-27
+
+- feat: allow negative auto-spin speed to reverse direction
+
 ## 0.1.3 - 2026-05-27
 
 - feat: continue manual item rotation briefly after releasing a drag

@@ -176,11 +176,11 @@ void ApplyAutoSpin() {
     }
 
     const float rotationSpeed = settings->rotationSpeed;
-    if (rotationSpeed <= 0.0F) {
+    if (rotationSpeed == 0.0F) {
         return;
     }
 
-    RE::NiPoint2 rotationDelta {-rotationSpeed * frameDelta, 0.0F};
+    RE::NiPoint2 rotationDelta {rotationSpeed * frameDelta, 0.0F};
     ApplyRotation(*manager, rotationDelta);
 }
 
