@@ -1,0 +1,20 @@
+[size=4][color=#00ffff]OVERVIEW[/color][/size]
+Small SKSE plugin that automatically spins the inventory item preview (including the zoomed in version).
+Manually spinning the preview takes precedence.
+
+
+[size=4][color=#00ffff]COMPATIBILITY[/color][/size]
+Should be compatible with anything that doesn't also mess with the inventory item preview.
+This started as a joke, but if you actually use/like it and run into issues, let me know and I'll look into it.
+
+
+[size=4][color=#00ffff]REQUIREMENTS[/color][/size]
+SE/AE
+[url=https://www.nexusmods.com/skyrimspecialedition/mods/32444]Address Library for SKSE Plugins[/url]
+
+VR
+[url=https://www.nexusmods.com/skyrimspecialedition/mods/58101]Address Library for SKSEVR[/url]
+
+
+[size=4][color=#00ffff]SOURCE[/color][/size]
+[url=https://github.com/gabriel-andreescu/ItemPreviewAutoSpinning]github.com/gabriel-andreescu/ItemPreviewAutoSpinning[/url]
