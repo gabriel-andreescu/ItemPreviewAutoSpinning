@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 - 2026-05-27
+
+- feat: continue manual item rotation briefly after releasing a drag
+
 ## 0.1.2 - 2026-05-27
 
 - feat: add configurable rotation speed and resume delay
