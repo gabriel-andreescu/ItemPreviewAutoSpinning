@@ -8,7 +8,7 @@ set(VCPKG_INSTALL_OPTIONS "--no-print-usage")
 
 project(
         ItemPreviewAutoSpinning
-        VERSION 0.1.1
+        VERSION 0.1.2
         DESCRIPTION "Automatically spins the inventory item preview."
         LANGUAGES CXX
 )
@@ -41,6 +41,7 @@ set(DEPLOY_DIR "" CACHE PATH "Deployment directory for base mod assets")
 set(DEPLOY_DIR_OPTIONAL "" CACHE PATH "Deployment directory for optional mod assets")
 set(ASSET_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Skyrim/Data")
 
+add_subdirectory(extern/CLibUtil)
 add_subdirectory(extern/CommonLibSSE-NG)
 
 include(extern/CommonLibSSE-NG/cmake/CommonLibSSE.cmake)
@@ -56,6 +57,7 @@ set(SOURCES
         src/AutoSpin.h
         src/main.cpp
         src/PCH.h
+        src/Settings.h
         "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
 )
 
@@ -77,10 +79,15 @@ target_include_directories(
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
+set_target_properties(CLibUtil PROPERTIES
+        INTERFACE_SYSTEM_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:CLibUtil,INTERFACE_INCLUDE_DIRECTORIES>
+)
+
 target_link_libraries(
         ${PROJECT_NAME}
         PUBLIC
         CommonLibSSE::CommonLibSSE
+        CLibUtil::CLibUtil
 )
 
 if (IPAS_ENABLE_PRECOMPILED_HEADERS)

@@ -1,4 +1,5 @@
 #include "AutoSpin.h"
+#include "Settings.h"
 
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
@@ -35,6 +36,7 @@ void SetupLog() {
 // ReSharper disable once CppParameterMayBeConstPtrOrRef
 void MessageHandler(SKSE::MessagingInterface::Message* a_msg) {
     if (a_msg->type == SKSE::MessagingInterface::kDataLoaded) {
+        Settings::GetSingleton()->Load();
         AutoSpin::Install();
         logger::info("Item Preview Auto Spinning initialized");
     }

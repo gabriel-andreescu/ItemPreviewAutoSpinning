@@ -1,5 +1,7 @@
 #include "AutoSpin.h"
 
+#include "Settings.h"
+
 #include "RE/B/BSTimer.h"
 #include "RE/I/Inventory3DManager.h"
 #include "RE/I/InventoryMenu.h"
@@ -8,8 +10,6 @@
 #include <algorithm>
 
 namespace {
-inline constexpr float kSpinRadiansPerSecond {0.30F};
-inline constexpr float kResumeDelaySeconds {0.35F};
 inline constexpr float kMaxFrameDelta {1.0F / 20.0F};
 
 using ApplyInventoryPreviewRotation_t = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
@@ -37,13 +37,20 @@ void ApplyAutoSpin() {
         return;
     }
 
+    const auto* settings = Settings::GetSingleton();
+
     if (IsMouseRotationActive()) {
-        g_resumeDelayRemaining = kResumeDelaySeconds;
+        g_resumeDelayRemaining = settings->resumeDelay;
         return;
     }
 
     if (g_resumeDelayRemaining > 0.0F) {
         g_resumeDelayRemaining = std::max(0.0F, g_resumeDelayRemaining - frameDelta);
+        return;
+    }
+
+    const float rotationSpeed = settings->rotationSpeed;
+    if (rotationSpeed <= 0.0F) {
         return;
     }
 
@@ -55,7 +62,7 @@ void ApplyAutoSpin() {
     // SE: 50902 -> 140888C20. AE: 51778 -> 140928C40. VR: 1408B65F0.
     static REL::Relocation<ApplyInventoryPreviewRotation_t> applyRotation {REL::VariantID(50902, 51778, 0x8B65F0)};
 
-    RE::NiPoint2 rotationDelta {-kSpinRadiansPerSecond * frameDelta, 0.0F};
+    RE::NiPoint2 rotationDelta {-rotationSpeed * frameDelta, 0.0F};
     applyRotation(manager, &rotationDelta);
 }
 

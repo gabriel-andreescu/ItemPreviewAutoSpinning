@@ -8,6 +8,15 @@ Should be compatible with anything that doesn't also mess with the inventory ite
 This started as a joke, but if you actually use/like it and run into issues, let me know and I'll look into it.
 
 
+[size=4][color=#00ffff]CONFIGURATION[/color][/size]
+[quote]Data\SKSE\Plugins\ItemPreviewAutoSpinning.ini[/quote]
+
+[list]
+[*]Automatic rotation speed. Default: 0.3.[/*]
+[*]Resume delay after manually spinning the preview. Default: 0.35 seconds.[/*]
+[/list]
+
+
 [size=4][color=#00ffff]REQUIREMENTS[/color][/size]
 SE/AE
 [url=https://www.nexusmods.com/skyrimspecialedition/mods/32444]Address Library for SKSE Plugins[/url]
