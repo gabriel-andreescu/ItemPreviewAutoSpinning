@@ -8,12 +8,12 @@ set(VCPKG_INSTALL_OPTIONS "--no-print-usage")
 
 project(
         ItemPreviewAutoSpinning
-        VERSION 0.1.0
+        VERSION 0.1.1
         DESCRIPTION "Automatically spins the inventory item preview."
         LANGUAGES CXX
 )
 
-set(OPTIONAL_ASSETS_VERSION 0.1.0)
+set(OPTIONAL_ASSETS_VERSION "${PROJECT_VERSION}")
 
 option(IPAS_ENABLE_PRECOMPILED_HEADERS "Enable CMake precompiled headers" ON)
 
@@ -168,7 +168,7 @@ add_custom_target(
         "-DASSET_SOURCE_DIR=${ASSET_SOURCE_DIR}"
         "-DOUTPUT_DIR=${DIST_OUTPUT_DIR}"
         "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/dist/$<CONFIG>"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/package_skse_mod.cmake"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/package_mod.cmake"
         DEPENDS ${PROJECT_NAME}
         COMMENT "Creating ${PROJECT_NAME} distribution archives"
         VERBATIM

@@ -1,7 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "item-preview-auto-spinning",
-  "version-string": "0.1.0",
+  "version-string": "0.1.1",
   "description": "Automatically spins the inventory item preview - SKSE plugin for Skyrim",
   "homepage": "https://github.com/gabriel-andreescu/ItemPreviewAutoSpinning",
   "license": "GPL-3.0-only",
