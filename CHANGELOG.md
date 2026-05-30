@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5 - 2026-05-30
+
+- fix: avoid release spin after slow manual repositioning
+
 ## 0.1.4 - 2026-05-27
 
 - feat: allow negative auto-spin speed to reverse direction

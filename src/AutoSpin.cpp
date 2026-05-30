@@ -17,16 +17,19 @@
 namespace {
 inline constexpr float kMaxFrameDelta {1.0F / 20.0F};
 inline constexpr float kManualVelocitySmoothing {0.45F};
+inline constexpr float kManualSpinReleaseWindow {0.12F};
+inline constexpr float kManualSpinMinFlickSpeed {0.45F};
 inline constexpr float kManualSpinStopRatio {0.05F};
-inline constexpr float kManualSpinMinReleaseSpeed {0.12F};
 inline constexpr float kManualSpinStopSpeed {0.02F};
 inline constexpr float kManualSpinMaxSpeed {8.0F};
+inline constexpr float kManualSpinStaleAge {kManualSpinReleaseWindow + kMaxFrameDelta};
 
 using ApplyInventoryPreviewRotation_t = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
 
 float g_resumeDelayRemaining {0.0F};
 RE::NiPoint2 g_dragVelocity {};
 RE::NiPoint2 g_manualSpinVelocity {};
+float g_timeSinceManualMove {kManualSpinStaleAge};
 bool g_hasDragVelocity {false};
 bool g_wasMouseRotationActive {false};
 
@@ -60,6 +63,12 @@ void ClampVelocity(RE::NiPoint2& a_velocity, const float a_maxSpeed) {
     a_velocity.y *= scale;
 }
 
+void ClearDragVelocity() {
+    g_dragVelocity = {};
+    g_timeSinceManualMove = kManualSpinStaleAge;
+    g_hasDragVelocity = false;
+}
+
 void ApplyRotation(RE::Inventory3DManager& a_manager, const RE::NiPoint2& a_rotationDelta) {
     // SE: 50902 -> 140888C20. AE: 51778 -> 140928C40. VR: 1408B65F0.
     static REL::Relocation<ApplyInventoryPreviewRotation_t> applyRotation {REL::VariantID(50902, 51778, 0x8B65F0)};
@@ -86,11 +95,14 @@ void CaptureManualVelocity(const RE::MouseMoveEvent& a_event) {
         static_cast<float>(a_event.mouseInputY) * mouseSpeed
     };
 
-    if (GetSpeed(velocity) <= 0.0F) {
+    if (GetSpeed(velocity) < kManualSpinMinFlickSpeed) {
+        ClearDragVelocity();
         return;
     }
 
-    if (g_hasDragVelocity) {
+    const bool continueFlick = g_hasDragVelocity && g_timeSinceManualMove <= kManualSpinReleaseWindow;
+    g_timeSinceManualMove = 0.0F;
+    if (continueFlick) {
         g_dragVelocity.x = std::lerp(g_dragVelocity.x, velocity.x, kManualVelocitySmoothing);
         g_dragVelocity.y = std::lerp(g_dragVelocity.y, velocity.y, kManualVelocitySmoothing);
     } else {
@@ -100,9 +112,10 @@ void CaptureManualVelocity(const RE::MouseMoveEvent& a_event) {
 }
 
 void StartManualSpin(const Settings& a_settings) {
-    if (!a_settings.manualSpinAfterDrag || !g_hasDragVelocity || a_settings.manualSpinStrength <= 0.0F) {
-        g_hasDragVelocity = false;
-        g_dragVelocity = {};
+    const bool canSpin = a_settings.manualSpinAfterDrag && a_settings.manualSpinStrength > 0.0F;
+    const bool hasRecentFlick = g_hasDragVelocity && g_timeSinceManualMove <= kManualSpinReleaseWindow;
+    if (!canSpin || !hasRecentFlick) {
+        ClearDragVelocity();
         return;
     }
 
@@ -110,10 +123,9 @@ void StartManualSpin(const Settings& a_settings) {
     g_manualSpinVelocity.y = g_dragVelocity.y * a_settings.manualSpinStrength;
     ClampVelocity(g_manualSpinVelocity, kManualSpinMaxSpeed);
 
-    g_hasDragVelocity = false;
-    g_dragVelocity = {};
+    ClearDragVelocity();
 
-    if (GetSpeed(g_manualSpinVelocity) < kManualSpinMinReleaseSpeed) {
+    if (GetSpeed(g_manualSpinVelocity) < kManualSpinStopSpeed) {
         g_manualSpinVelocity = {};
     }
 }
@@ -148,8 +160,7 @@ void ApplyAutoSpin() {
     auto* manager = RE::Inventory3DManager::GetSingleton();
     if (!manager) {
         g_wasMouseRotationActive = false;
-        g_hasDragVelocity = false;
-        g_dragVelocity = {};
+        ClearDragVelocity();
         g_manualSpinVelocity = {};
         return;
     }
@@ -158,6 +169,7 @@ void ApplyAutoSpin() {
         g_wasMouseRotationActive = true;
         g_resumeDelayRemaining = settings->resumeDelay;
         g_manualSpinVelocity = {};
+        g_timeSinceManualMove += frameDelta;
         return;
     }
 

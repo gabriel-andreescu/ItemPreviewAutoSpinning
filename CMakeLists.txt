@@ -8,7 +8,7 @@ set(VCPKG_INSTALL_OPTIONS "--no-print-usage")
 
 project(
         ItemPreviewAutoSpinning
-        VERSION 0.1.4
+        VERSION 0.1.5
         DESCRIPTION "Automatically spins the inventory item preview."
         LANGUAGES CXX
 )
