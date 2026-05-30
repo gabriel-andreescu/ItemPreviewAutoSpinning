@@ -5,14 +5,19 @@
 #include "RE/B/BSTimer.h"
 #include "RE/I/INISettingCollection.h"
 #include "RE/I/Inventory3DManager.h"
-#include "RE/I/InventoryMenu.h"
 #include "RE/M/MouseMoveEvent.h"
 #include "RE/N/NiPoint2.h"
 #include "RE/Offsets_VTABLE.h"
 #include "RE/S/Setting.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+
+#include <xbyak/xbyak.h>
 
 namespace {
 inline constexpr float kMaxFrameDelta {1.0F / 20.0F};
@@ -23,6 +28,17 @@ inline constexpr float kManualSpinStopRatio {0.05F};
 inline constexpr float kManualSpinStopSpeed {0.02F};
 inline constexpr float kManualSpinMaxSpeed {8.0F};
 inline constexpr float kManualSpinStaleAge {kManualSpinReleaseWindow + kMaxFrameDelta};
+inline constexpr std::size_t kInventory3DManagerRenderPatchSize {6};
+inline constexpr std::size_t kExistingBranchPatchSize {5};
+
+constexpr std::array<std::byte, kInventory3DManagerRenderPatchSize> kInventory3DManagerRenderPrologue {
+    std::byte {0x40},
+    std::byte {0x53},
+    std::byte {0x48},
+    std::byte {0x83},
+    std::byte {0xEC},
+    std::byte {0x20},
+};
 
 using ApplyInventoryPreviewRotation_t = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
 
@@ -32,6 +48,53 @@ RE::NiPoint2 g_manualSpinVelocity {};
 float g_timeSinceManualMove {kManualSpinStaleAge};
 bool g_hasDragVelocity {false};
 bool g_wasMouseRotationActive {false};
+
+[[nodiscard]] bool HasExpectedInventory3DManagerRenderPrologue(const std::byte* a_address) noexcept {
+    return std::memcmp(a_address, kInventory3DManagerRenderPrologue.data(), kInventory3DManagerRenderPrologue.size())
+           == 0;
+}
+
+template <class T, std::size_t BYTES>
+void HookFunctionPrologue(const std::uintptr_t a_src, const std::byte* a_originalBytes) {
+    struct Patch : Xbyak::CodeGenerator {
+        Patch(
+            const std::uintptr_t a_originalFuncAddr,
+            const std::byte* a_originalBytes,
+            const std::size_t a_originalByteLength
+        ) {
+            for (::std::size_t i = 0; i < a_originalByteLength; ++i) {
+                db(::std::to_integer<::std::uint8_t>(a_originalBytes[i]));
+            }
+
+            jmp(ptr[rip]);
+            dq(a_originalFuncAddr + a_originalByteLength);
+        }
+    };
+
+    Patch patch(a_src, a_originalBytes, BYTES);
+    patch.ready();
+
+    auto& trampoline = SKSE::GetTrampoline();
+    trampoline.write_branch<BYTES>(a_src, T::thunk);
+
+    const auto alloc = trampoline.allocate(patch.getSize());
+    std::memcpy(alloc, patch.getCode(), patch.getSize());
+
+    T::func = reinterpret_cast<std::uintptr_t>(alloc);
+}
+
+void LogUnsupportedInventory3DManagerRenderPrologue(const std::uintptr_t a_address, const std::byte* a_bytes) {
+    logger::critical(
+        "Hooks: Inventory3DManager::Render hook skipped | reason=unsupportedPrologue | address={:X} | bytes={:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
+        a_address,
+        std::to_integer<unsigned>(a_bytes[0]),
+        std::to_integer<unsigned>(a_bytes[1]),
+        std::to_integer<unsigned>(a_bytes[2]),
+        std::to_integer<unsigned>(a_bytes[3]),
+        std::to_integer<unsigned>(a_bytes[4]),
+        std::to_integer<unsigned>(a_bytes[5])
+    );
+}
 
 [[nodiscard]] float GetRealTimeDelta() {
     auto* timer = RE::BSTimer::GetSingleton();
@@ -67,6 +130,12 @@ void ClearDragVelocity() {
     g_dragVelocity = {};
     g_timeSinceManualMove = kManualSpinStaleAge;
     g_hasDragVelocity = false;
+}
+
+void ResetPreviewState() {
+    g_wasMouseRotationActive = false;
+    ClearDragVelocity();
+    g_manualSpinVelocity = {};
 }
 
 void ApplyRotation(RE::Inventory3DManager& a_manager, const RE::NiPoint2& a_rotationDelta) {
@@ -150,20 +219,13 @@ void StartManualSpin(const Settings& a_settings) {
     return true;
 }
 
-void ApplyAutoSpin() {
+void ApplyAutoSpin(RE::Inventory3DManager& a_manager) {
     const float frameDelta = GetRealTimeDelta();
     if (frameDelta <= 0.0F) {
         return;
     }
 
     const auto* settings = Settings::GetSingleton();
-    auto* manager = RE::Inventory3DManager::GetSingleton();
-    if (!manager) {
-        g_wasMouseRotationActive = false;
-        ClearDragVelocity();
-        g_manualSpinVelocity = {};
-        return;
-    }
 
     if (IsMouseRotationActive()) {
         g_wasMouseRotationActive = true;
@@ -178,7 +240,7 @@ void ApplyAutoSpin() {
         StartManualSpin(*settings);
     }
 
-    if (ApplyManualSpin(*manager, *settings, frameDelta)) {
+    if (ApplyManualSpin(a_manager, *settings, frameDelta)) {
         return;
     }
 
@@ -193,17 +255,49 @@ void ApplyAutoSpin() {
     }
 
     RE::NiPoint2 rotationDelta {rotationSpeed * frameDelta, 0.0F};
-    ApplyRotation(*manager, rotationDelta);
+    ApplyRotation(a_manager, rotationDelta);
 }
 
-struct InventoryMenu_PostDisplay {
-    static void thunk(RE::InventoryMenu* a_menu) {
-        func(a_menu);
-        ApplyAutoSpin();
+struct Inventory3DManager_Render {
+    [[nodiscard]] static bool Install() {
+        // SE:  Inventory3DManager::Render_140887750
+        // AE:  Inventory3DManager::Render_140927560
+        // GOG: Inventory3DManager::Render_1409295A0
+        // VR:  Inventory3DManager::Render_1408B4C90
+        REL::Relocation<std::byte*> target {RELOCATION_ID(50882, 51755)};
+        const auto* targetBytes = target.get();
+        const auto address = target.address();
+        auto& trampoline = SKSE::GetTrampoline();
+
+        if (REL::make_pattern<"E9">().match(address)) {
+            func = trampoline.write_branch<kExistingBranchPatchSize>(address, thunk);
+
+            logger::warn("Hooks: Inventory3DManager::Render hook chained | reason=existingBranch | branch=E9");
+            return true;
+        }
+
+        if (HasExpectedInventory3DManagerRenderPrologue(targetBytes)) {
+            HookFunctionPrologue<Inventory3DManager_Render, kInventory3DManagerRenderPatchSize>(address, targetBytes);
+
+            logger::info("Hooks: Inventory3DManager::Render hook installed");
+            return true;
+        }
+
+        LogUnsupportedInventory3DManagerRenderPrologue(address, targetBytes);
+        return false;
+    }
+
+    static void thunk(RE::Inventory3DManager* a_manager) {
+        if (!a_manager) {
+            ResetPreviewState();
+            return;
+        }
+
+        ApplyAutoSpin(*a_manager);
+        func(a_manager);
     }
 
     static inline REL::Relocation<decltype(thunk)> func;
-    static constexpr std::size_t idx {0x6};
 };
 
 struct Inventory3DManager_ProcessMouseMove {
@@ -223,12 +317,14 @@ struct Inventory3DManager_ProcessMouseMove {
 
 void AutoSpin::Install() {
 #ifndef __clang_analyzer__
-    stl::write_vfunc<RE::InventoryMenu, InventoryMenu_PostDisplay>();
+    if (!Inventory3DManager_Render::Install()) {
+        stl::report_and_fail("Failed to install Inventory3DManager::Render hook"sv);
+    }
+
     stl::write_vfunc<Inventory3DManager_ProcessMouseMove>(RE::VTABLE_Inventory3DManager[0]);
 #endif
     logger::info(
-        "AutoSpin hook installed | menu=InventoryMenu | slot={} | input=Inventory3DManager | inputSlot={} | version={}",
-        InventoryMenu_PostDisplay::idx,
+        "AutoSpin hook installed | render=Inventory3DManager::Render | renderID=50882/51755 | input=Inventory3DManager | inputSlot={} | version={}",
         Inventory3DManager_ProcessMouseMove::idx,
         REL::Module::get().version()
     );

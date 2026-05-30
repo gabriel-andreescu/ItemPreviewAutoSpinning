@@ -5,6 +5,8 @@
 #include <spdlog/sinks/msvc_sink.h>
 
 namespace {
+constexpr auto kTrampolineSize = 64;
+
 void SetupLog() {
     std::shared_ptr<spdlog::sinks::sink> sink;
     if (IsDebuggerPresent()) {
@@ -47,6 +49,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     SetupLog();
 
     SKSE::Init(a_skse, false);
+    SKSE::AllocTrampoline(kTrampolineSize);
 
     const auto* msg = SKSE::GetMessagingInterface();
     if (!msg) {
