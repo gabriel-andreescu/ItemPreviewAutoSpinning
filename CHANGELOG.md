@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7 - 2026-06-01
+
+- fix: exclude magic effect previews
+
 ## 0.1.6 - 2026-05-30
 
 - fix: spin item previews outside the inventory menu

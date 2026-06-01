@@ -111,6 +111,10 @@ void LogUnsupportedInventory3DManagerRenderPrologue(const std::uintptr_t a_addre
     return *bMouseRotation;
 }
 
+[[nodiscard]] bool ShouldSpinInventoryPreview(const RE::Inventory3DManager& a_manager) noexcept {
+    return a_manager.currentLightScheme == RE::INTERFACE_LIGHT_SCHEME::kInventory;
+}
+
 [[nodiscard]] float GetSpeed(const RE::NiPoint2& a_velocity) {
     return std::sqrt((a_velocity.x * a_velocity.x) + (a_velocity.y * a_velocity.y));
 }
@@ -133,6 +137,7 @@ void ClearDragVelocity() {
 }
 
 void ResetPreviewState() {
+    g_resumeDelayRemaining = 0.0F;
     g_wasMouseRotationActive = false;
     ClearDragVelocity();
     g_manualSpinVelocity = {};
@@ -293,7 +298,11 @@ struct Inventory3DManager_Render {
             return;
         }
 
-        ApplyAutoSpin(*a_manager);
+        if (ShouldSpinInventoryPreview(*a_manager)) {
+            ApplyAutoSpin(*a_manager);
+        } else {
+            ResetPreviewState();
+        }
         func(a_manager);
     }
 
@@ -303,7 +312,7 @@ struct Inventory3DManager_Render {
 struct Inventory3DManager_ProcessMouseMove {
     static bool thunk(RE::Inventory3DManager* a_manager, RE::MouseMoveEvent* a_event) {
         const bool processed = func(a_manager, a_event);
-        if (processed && a_event && IsMouseRotationActive()) {
+        if (processed && a_manager && a_event && ShouldSpinInventoryPreview(*a_manager) && IsMouseRotationActive()) {
             CaptureManualVelocity(*a_event);
         }
 
