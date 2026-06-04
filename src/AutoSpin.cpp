@@ -1,6 +1,7 @@
 #include "AutoSpin.h"
 
-#include "RotationBounds.h"
+#include "HookUtil.h"
+#include "InventoryPreviewRotation.h"
 #include "Settings.h"
 
 #include "RE/B/BSTimer.h"
@@ -16,9 +17,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstring>
-
-#include <xbyak/xbyak.h>
 
 namespace {
 inline constexpr float kMaxFrameDelta {1.0F / 20.0F};
@@ -41,48 +39,12 @@ constexpr std::array<std::byte, kInventory3DManagerRenderPatchSize> kInventory3D
     std::byte {0x20},
 };
 
-using ApplyInventoryPreviewRotation_t = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
-
 float g_resumeDelayRemaining {0.0F};
 RE::NiPoint2 g_dragVelocity {};
 RE::NiPoint2 g_manualSpinVelocity {};
 float g_timeSinceManualMove {kManualSpinStaleAge};
 bool g_hasDragVelocity {false};
 bool g_wasMouseRotationActive {false};
-
-[[nodiscard]] bool HasExpectedInventory3DManagerRenderPrologue(const std::byte* a_address) noexcept {
-    return std::memcmp(a_address, kInventory3DManagerRenderPrologue.data(), kInventory3DManagerRenderPrologue.size())
-           == 0;
-}
-
-template <class T, std::size_t BYTES>
-void HookFunctionPrologue(const std::uintptr_t a_src, const std::byte* a_originalBytes) {
-    struct Patch : Xbyak::CodeGenerator {
-        Patch(
-            const std::uintptr_t a_originalFuncAddr,
-            const std::byte* a_originalBytes,
-            const std::size_t a_originalByteLength
-        ) {
-            for (::std::size_t i = 0; i < a_originalByteLength; ++i) {
-                db(::std::to_integer<::std::uint8_t>(a_originalBytes[i]));
-            }
-
-            jmp(ptr[rip]);
-            dq(a_originalFuncAddr + a_originalByteLength);
-        }
-    };
-
-    Patch patch(a_src, a_originalBytes, BYTES);
-    patch.ready();
-
-    auto& trampoline = SKSE::GetTrampoline();
-    trampoline.write_branch<BYTES>(a_src, T::thunk);
-
-    const auto alloc = trampoline.allocate(patch.getSize());
-    std::memcpy(alloc, patch.getCode(), patch.getSize());
-
-    T::func = reinterpret_cast<std::uintptr_t>(alloc);
-}
 
 void LogUnsupportedInventory3DManagerRenderPrologue(const std::uintptr_t a_address, const std::byte* a_bytes) {
     logger::critical(
@@ -95,15 +57,6 @@ void LogUnsupportedInventory3DManagerRenderPrologue(const std::uintptr_t a_addre
         std::to_integer<unsigned>(a_bytes[4]),
         std::to_integer<unsigned>(a_bytes[5])
     );
-}
-
-[[nodiscard]] RE::LoadedInventoryModel* GetCurrentLoadedModel(RE::Inventory3DManager& a_manager) {
-    auto& loadedModels = a_manager.GetRuntimeData().loadedModels;
-    if (loadedModels.empty()) {
-        return nullptr;
-    }
-
-    return &loadedModels.back();
 }
 
 [[nodiscard]] float GetRealTimeDelta() {
@@ -119,10 +72,6 @@ void LogUnsupportedInventory3DManagerRenderPrologue(const std::uintptr_t a_addre
 [[nodiscard]] bool IsMouseRotationActive() {
     static REL::Relocation<bool*> bMouseRotation {RELOCATION_ID(519620, 406167)};
     return *bMouseRotation;
-}
-
-[[nodiscard]] bool ShouldSpinInventoryPreview(const RE::Inventory3DManager& a_manager) noexcept {
-    return a_manager.currentLightScheme == RE::INTERFACE_LIGHT_SCHEME::kInventory;
 }
 
 [[nodiscard]] float GetSpeed(const RE::NiPoint2& a_velocity) {
@@ -151,21 +100,6 @@ void ResetPreviewState() {
     g_wasMouseRotationActive = false;
     ClearDragVelocity();
     g_manualSpinVelocity = {};
-}
-
-void ApplyRotation(RE::Inventory3DManager& a_manager, const RE::NiPoint2& a_rotationDelta) {
-    // SE: 50902 -> 140888C20. AE: 51778 -> 140928C40. VR: 1408B65F0.
-    static REL::Relocation<ApplyInventoryPreviewRotation_t> applyRotation {REL::VariantID(50902, 51778, 0x8B65F0)};
-
-    auto rotationDelta = a_rotationDelta;
-    auto* loadedModel = GetCurrentLoadedModel(a_manager);
-    const bool appliedSanitizedCenter = loadedModel && RotationBounds::ApplySanitizedRotationCenter(*loadedModel);
-
-    applyRotation(&a_manager, &rotationDelta);
-
-    if (appliedSanitizedCenter) {
-        RotationBounds::RestoreFullRotationBound(*loadedModel);
-    }
 }
 
 void CaptureManualVelocity(const RE::MouseMoveEvent& a_event) {
@@ -232,7 +166,7 @@ void StartManualSpin(const Settings& a_settings) {
     }
 
     RE::NiPoint2 rotationDelta {g_manualSpinVelocity.x * a_frameDelta, g_manualSpinVelocity.y * a_frameDelta};
-    ApplyRotation(a_manager, rotationDelta);
+    InventoryPreviewRotation::Apply(a_manager, rotationDelta);
 
     const float decay = std::pow(kManualSpinStopRatio, a_frameDelta / a_settings.manualSpinDuration);
     g_manualSpinVelocity.x *= decay;
@@ -277,7 +211,7 @@ void ApplyAutoSpin(RE::Inventory3DManager& a_manager) {
     }
 
     RE::NiPoint2 rotationDelta {rotationSpeed * frameDelta, 0.0F};
-    ApplyRotation(a_manager, rotationDelta);
+    InventoryPreviewRotation::Apply(a_manager, rotationDelta);
 }
 
 struct Inventory3DManager_Render {
@@ -298,8 +232,11 @@ struct Inventory3DManager_Render {
             return true;
         }
 
-        if (HasExpectedInventory3DManagerRenderPrologue(targetBytes)) {
-            HookFunctionPrologue<Inventory3DManager_Render, kInventory3DManagerRenderPatchSize>(address, targetBytes);
+        if (HookUtil::HasExpectedPrologue(targetBytes, kInventory3DManagerRenderPrologue)) {
+            HookUtil::HookFunctionPrologue<Inventory3DManager_Render, kInventory3DManagerRenderPatchSize>(
+                address,
+                targetBytes
+            );
 
             logger::info("Hooks: Inventory3DManager::Render hook installed");
             return true;
@@ -315,7 +252,7 @@ struct Inventory3DManager_Render {
             return;
         }
 
-        if (ShouldSpinInventoryPreview(*a_manager)) {
+        if (InventoryPreviewRotation::ShouldHandle(*a_manager)) {
             ApplyAutoSpin(*a_manager);
         } else {
             ResetPreviewState();
@@ -329,7 +266,11 @@ struct Inventory3DManager_Render {
 struct Inventory3DManager_ProcessMouseMove {
     static bool thunk(RE::Inventory3DManager* a_manager, RE::MouseMoveEvent* a_event) {
         const bool processed = func(a_manager, a_event);
-        if (processed && a_manager && a_event && ShouldSpinInventoryPreview(*a_manager) && IsMouseRotationActive()) {
+        if (processed
+            && a_manager
+            && a_event
+            && InventoryPreviewRotation::ShouldHandle(*a_manager)
+            && IsMouseRotationActive()) {
             CaptureManualVelocity(*a_event);
         }
 
@@ -343,6 +284,8 @@ struct Inventory3DManager_ProcessMouseMove {
 
 void AutoSpin::Install() {
 #ifndef __clang_analyzer__
+    InventoryPreviewRotation::Install();
+
     if (!Inventory3DManager_Render::Install()) {
         stl::report_and_fail("Failed to install Inventory3DManager::Render hook"sv);
     }

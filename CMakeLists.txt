@@ -55,6 +55,9 @@ configure_file(
 set(SOURCES
         src/AutoSpin.cpp
         src/AutoSpin.h
+        src/HookUtil.h
+        src/InventoryPreviewRotation.cpp
+        src/InventoryPreviewRotation.h
         src/main.cpp
         src/PCH.h
         src/RotationBounds.cpp
