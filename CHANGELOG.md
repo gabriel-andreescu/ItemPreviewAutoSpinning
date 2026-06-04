@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8 - 2026-06-04
+
+- fix: keep auto-spinning item previews centered when mesh effect geometry inflates the preview bounds
+
 ## 0.1.7 - 2026-06-01
 
 - fix: exclude magic effect previews

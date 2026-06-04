@@ -8,7 +8,7 @@ set(VCPKG_INSTALL_OPTIONS "--no-print-usage")
 
 project(
         ItemPreviewAutoSpinning
-        VERSION 0.1.7
+        VERSION 0.1.8
         DESCRIPTION "Automatically spins the inventory item preview."
         LANGUAGES CXX
 )
@@ -57,6 +57,8 @@ set(SOURCES
         src/AutoSpin.h
         src/main.cpp
         src/PCH.h
+        src/RotationBounds.cpp
+        src/RotationBounds.h
         src/Settings.h
         "${CMAKE_CURRENT_BINARY_DIR}/version.rc"
 )

@@ -1,5 +1,6 @@
 #include "AutoSpin.h"
 
+#include "RotationBounds.h"
 #include "Settings.h"
 
 #include "RE/B/BSTimer.h"
@@ -96,6 +97,15 @@ void LogUnsupportedInventory3DManagerRenderPrologue(const std::uintptr_t a_addre
     );
 }
 
+[[nodiscard]] RE::LoadedInventoryModel* GetCurrentLoadedModel(RE::Inventory3DManager& a_manager) {
+    auto& loadedModels = a_manager.GetRuntimeData().loadedModels;
+    if (loadedModels.empty()) {
+        return nullptr;
+    }
+
+    return &loadedModels.back();
+}
+
 [[nodiscard]] float GetRealTimeDelta() {
     auto* timer = RE::BSTimer::GetSingleton();
     if (!timer) {
@@ -148,7 +158,14 @@ void ApplyRotation(RE::Inventory3DManager& a_manager, const RE::NiPoint2& a_rota
     static REL::Relocation<ApplyInventoryPreviewRotation_t> applyRotation {REL::VariantID(50902, 51778, 0x8B65F0)};
 
     auto rotationDelta = a_rotationDelta;
+    auto* loadedModel = GetCurrentLoadedModel(a_manager);
+    const bool appliedSanitizedCenter = loadedModel && RotationBounds::ApplySanitizedRotationCenter(*loadedModel);
+
     applyRotation(&a_manager, &rotationDelta);
+
+    if (appliedSanitizedCenter) {
+        RotationBounds::RestoreFullRotationBound(*loadedModel);
+    }
 }
 
 void CaptureManualVelocity(const RE::MouseMoveEvent& a_event) {
