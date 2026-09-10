@@ -5,6 +5,7 @@
 
 #include "RE/I/Inventory3DManager.h"
 #include "RE/N/NiPoint2.h"
+#include "RE/T/TESForm.h"
 
 #include <array>
 #include <cstddef>
@@ -76,6 +77,21 @@ using ApplyRotation_t = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
     }
 
     return &loadedModels.back();
+}
+
+[[nodiscard]] const RE::LoadedInventoryModel* GetCurrentLoadedModel(const RE::Inventory3DManager& a_manager) {
+    const auto& loadedModels = a_manager.GetRuntimeData().loadedModels;
+    if (loadedModels.empty()) {
+        return nullptr;
+    }
+
+    return &loadedModels.back();
+}
+
+[[nodiscard]] bool HasInventoryObjectLoaded(const RE::Inventory3DManager& a_manager) {
+    const auto* loadedModel = GetCurrentLoadedModel(a_manager);
+    const auto* itemBase = loadedModel ? loadedModel->itemBase : nullptr;
+    return itemBase && itemBase->IsInventoryObject();
 }
 
 [[nodiscard]] std::string FormatBytes(std::span<const std::byte> a_bytes) {
@@ -219,5 +235,7 @@ void InventoryPreviewRotation::Apply(RE::Inventory3DManager& a_manager, const RE
 }
 
 bool InventoryPreviewRotation::ShouldHandle(const RE::Inventory3DManager& a_manager) noexcept {
-    return a_manager.currentLightScheme == RE::INTERFACE_LIGHT_SCHEME::kInventory;
+    return a_manager.currentLightScheme
+           == RE::INTERFACE_LIGHT_SCHEME::kInventory
+           && HasInventoryObjectLoaded(a_manager);
 }
