@@ -119,7 +119,7 @@ using ApplyRotation_t = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
 }
 
 void LogUnsupportedApplyRotationPrologue(const std::uintptr_t a_address, std::span<const std::byte> a_bytes) {
-    logger::critical(
+    logger::error(
         "Hooks: Inventory3DManager preview rotation hook skipped | reason=unsupportedPrologue | address={:X} | byteCount={} | bytes={}",
         a_address,
         a_bytes.size(),
@@ -147,10 +147,13 @@ struct Inventory3DManager_ApplyRotation {
 
         if (REL::Module::IsVR()) {
             if (HookUtil::HasExpectedPrologue(targetBytes, kApplyRotationPrologueVR)) {
-                HookUtil::HookFunctionPrologue<Inventory3DManager_ApplyRotation, kApplyRotationPatchSizeVR>(
-                    address,
-                    targetBytes
-                );
+                if (!HookUtil::HookFunctionPrologue<Inventory3DManager_ApplyRotation, kApplyRotationPatchSizeVR>(
+                        address,
+                        targetBytes
+                    )) {
+                    logger::error("Hooks: Inventory3DManager preview rotation hook skipped | reason=writeFailed");
+                    return false;
+                }
 
                 logger::info("Hooks: Inventory3DManager preview rotation hook installed");
                 return true;
@@ -165,10 +168,13 @@ struct Inventory3DManager_ApplyRotation {
 
         if (HookUtil::HasExpectedPrologue(targetBytes, kApplyRotationPrologueSE)
             || HookUtil::HasExpectedPrologue(targetBytes, kApplyRotationPrologueAEGOG)) {
-            HookUtil::HookFunctionPrologue<Inventory3DManager_ApplyRotation, kApplyRotationPatchSize>(
-                address,
-                targetBytes
-            );
+            if (!HookUtil::HookFunctionPrologue<Inventory3DManager_ApplyRotation, kApplyRotationPatchSize>(
+                    address,
+                    targetBytes
+                )) {
+                logger::error("Hooks: Inventory3DManager preview rotation hook skipped | reason=writeFailed");
+                return false;
+            }
 
             logger::info("Hooks: Inventory3DManager preview rotation hook installed");
             return true;
@@ -201,7 +207,7 @@ struct Inventory3DManager_ApplyRotation {
 
 void InventoryPreviewRotation::Install() {
     if (!Inventory3DManager_ApplyRotation::Install()) {
-        stl::report_and_fail("Failed to install Inventory3DManager preview rotation hook"sv);
+        logger::warn("Hooks: Inventory3DManager preview rotation hook unavailable. Using vanilla preview rotation");
     }
 }
 

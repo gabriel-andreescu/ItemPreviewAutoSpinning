@@ -233,10 +233,13 @@ struct Inventory3DManager_Render {
         }
 
         if (HookUtil::HasExpectedPrologue(targetBytes, kInventory3DManagerRenderPrologue)) {
-            HookUtil::HookFunctionPrologue<Inventory3DManager_Render, kInventory3DManagerRenderPatchSize>(
-                address,
-                targetBytes
-            );
+            if (!HookUtil::HookFunctionPrologue<Inventory3DManager_Render, kInventory3DManagerRenderPatchSize>(
+                    address,
+                    targetBytes
+                )) {
+                logger::critical("Hooks: Inventory3DManager::Render hook skipped | reason=writeFailed");
+                return false;
+            }
 
             logger::info("Hooks: Inventory3DManager::Render hook installed");
             return true;

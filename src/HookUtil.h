@@ -22,7 +22,7 @@ template <std::size_t SIZE>
 }
 
 template <std::size_t BYTES, class F>
-void WriteAbsoluteJump(const std::uintptr_t a_src, F a_dst, const std::byte* a_originalBytes) {
+[[nodiscard]] bool WriteAbsoluteJump(const std::uintptr_t a_src, F a_dst, const std::byte* a_originalBytes) {
     static_assert(BYTES >= kAbsoluteJumpSize);
 
 #pragma pack(push, 1)
@@ -46,13 +46,11 @@ void WriteAbsoluteJump(const std::uintptr_t a_src, F a_dst, const std::byte* a_o
     patch.fill(std::byte {0x90});
     std::memcpy(patch.data(), &assembly, sizeof(assembly));
 
-    if (!REL::safe_write(a_src, patch.data(), patch.size(), a_originalBytes, BYTES)) {
-        SKSE::stl::report_and_fail("Failed to write function prologue hook");
-    }
+    return REL::safe_write(a_src, patch.data(), patch.size(), a_originalBytes, BYTES);
 }
 
 template <class T, std::size_t BYTES>
-void HookFunctionPrologue(const std::uintptr_t a_src, const std::byte* a_originalBytes) {
+[[nodiscard]] bool HookFunctionPrologue(const std::uintptr_t a_src, const std::byte* a_originalBytes) {
     struct Patch : Xbyak::CodeGenerator {
         Patch(
             const std::uintptr_t a_originalFuncAddr,
@@ -75,12 +73,15 @@ void HookFunctionPrologue(const std::uintptr_t a_src, const std::byte* a_origina
     if constexpr (BYTES == 5 || BYTES == 6) {
         trampoline.write_branch<BYTES>(a_src, T::thunk);
     } else {
-        WriteAbsoluteJump<BYTES>(a_src, T::thunk, a_originalBytes);
+        if (!WriteAbsoluteJump<BYTES>(a_src, T::thunk, a_originalBytes)) {
+            return false;
+        }
     }
 
     const auto alloc = trampoline.allocate(patch.getSize());
     std::memcpy(alloc, patch.getCode(), patch.getSize());
 
     T::func = reinterpret_cast<std::uintptr_t>(alloc);
+    return true;
 }
 }
