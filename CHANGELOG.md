@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9 - 2026-06-05
+
+- fix: keep the plugin loading when preview-centering hooks are unavailable
+- fix: exclude spell and enchantment previews from inventory preview spinning in crafting menus
+
 ## 0.1.8 - 2026-06-04
 
 - fix: keep auto-spinning item previews centered when mesh effect geometry inflates the preview bounds
