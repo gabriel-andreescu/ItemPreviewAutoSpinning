@@ -1,0 +1,18 @@
+_commit: v0.2.0
+_src_path: https://github.com/gabriel-andreescu/BethesdaModKit.git
+author: GabonZ
+bmk_repository: https://github.com/gabriel-andreescu/BethesdaModKit.git
+components:
+  - native
+description: Automatically spins item previews.
+devbench_api: false
+devbench_tests: false
+game: skyrim
+mcm: true
+mutagen_source: src/mutagen/ItemPreviewAutoSpinning
+native_settings: true
+native_source: src
+pack_assets: false
+papyrus_source: src/papyrus
+pre_commit: true
+project_name: ItemPreviewAutoSpinning

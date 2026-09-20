@@ -5,6 +5,6 @@ struct LoadedInventoryModel;
 }
 
 namespace RotationBounds {
-[[nodiscard]] bool ApplySanitizedRotationCenter(RE::LoadedInventoryModel& a_loadedModel);
-void RestoreFullRotationBound(RE::LoadedInventoryModel& a_loadedModel);
+[[nodiscard]] bool ApplySanitizedRotationCenter(const RE::LoadedInventoryModel& a_loadedModel);
+void RestoreFullRotationBound(const RE::LoadedInventoryModel& a_loadedModel);
 }

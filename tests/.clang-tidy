@@ -1,0 +1,3 @@
+InheritParentConfig: true
+# Catch2 REQUIRE aborts the test on failure, which this checker does not model.
+Checks: '-bugprone-unchecked-optional-access'

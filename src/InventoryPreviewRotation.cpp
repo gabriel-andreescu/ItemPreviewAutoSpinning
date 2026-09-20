@@ -1,21 +1,27 @@
 #include "InventoryPreviewRotation.h"
-
 #include "HookUtil.h"
+#include "PCH.h" // IWYU pragma: keep
 #include "RotationBounds.h"
 
-#include "RE/I/Inventory3DManager.h"
-#include "RE/N/NiPoint2.h"
-#include "RE/T/TESForm.h"
+#include <RE/B/BSTArray.h>
+#include <RE/I/InterfaceLightSchemes.h>
+#include <RE/I/Inventory3DManager.h>
+#include <RE/N/NiPoint2.h>
+#include <RE/T/TESForm.h>
+#include <REL/Module.h>
+#include <REL/Pattern.h>
+#include <REL/Relocation.h>
+#include <SKSE/SKSE.h>
+#include <spdlog/fmt/bin_to_hex.h>
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <span>
-#include <string>
 
 namespace {
 inline constexpr std::size_t kExistingBranchPatchSize {5};
 inline constexpr std::size_t kApplyRotationPatchSize {18};
-inline constexpr std::size_t kApplyRotationPatchSizeVR {6};
 
 constexpr std::array<std::byte, kApplyRotationPatchSize> kApplyRotationPrologueSE {
     std::byte {0x48},
@@ -59,16 +65,7 @@ constexpr std::array<std::byte, kApplyRotationPatchSize> kApplyRotationPrologueA
     std::byte {0x00},
 };
 
-constexpr std::array<std::byte, kApplyRotationPatchSizeVR> kApplyRotationPrologueVR {
-    std::byte {0x40},
-    std::byte {0x53},
-    std::byte {0x48},
-    std::byte {0x83},
-    std::byte {0xEC},
-    std::byte {0x70},
-};
-
-using ApplyRotation_t = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
+using ApplyRotationFunction = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
 
 [[nodiscard]] RE::LoadedInventoryModel* GetCurrentLoadedModel(RE::Inventory3DManager& a_manager) {
     auto& loadedModels = a_manager.GetRuntimeData().loadedModels;
@@ -79,120 +76,53 @@ using ApplyRotation_t = void (*)(RE::Inventory3DManager*, RE::NiPoint2*);
     return &loadedModels.back();
 }
 
-[[nodiscard]] const RE::LoadedInventoryModel* GetCurrentLoadedModel(const RE::Inventory3DManager& a_manager) {
-    const auto& loadedModels = a_manager.GetRuntimeData().loadedModels;
-    if (loadedModels.empty()) {
-        return nullptr;
+[[nodiscard]] const RE::TESForm* GetCurrentItemBase(const RE::Inventory3DManager& a_manager) {
+    if (REL::Module::IsVR()) {
+        // VR uses 0x48-byte entries and stores the array count at manager + 0x258.
+        struct LoadedInventoryModelVR {
+            RE::TESForm* itemBase;
+            std::array<std::byte, 0x40> remaining;
+        };
+        static_assert(sizeof(LoadedInventoryModelVR) == 0x48);
+
+        const auto& models = REL::RelocateMember<const RE::BSTSmallArray<LoadedInventoryModelVR, 7>>(&a_manager, 0x58);
+        return models.empty() ? nullptr : models.back().itemBase;
     }
 
-    return &loadedModels.back();
-}
-
-[[nodiscard]] bool HasInventoryObjectLoaded(const RE::Inventory3DManager& a_manager) {
-    const auto* loadedModel = GetCurrentLoadedModel(a_manager);
-    const auto* itemBase = loadedModel ? loadedModel->itemBase : nullptr;
-    return itemBase && itemBase->IsInventoryObject();
-}
-
-[[nodiscard]] std::string FormatBytes(std::span<const std::byte> a_bytes) {
-    if (a_bytes.empty()) {
-        return {};
-    }
-
-    constexpr std::array<char, 16> hexDigits {
-        '0',
-        '1',
-        '2',
-        '3',
-        '4',
-        '5',
-        '6',
-        '7',
-        '8',
-        '9',
-        'A',
-        'B',
-        'C',
-        'D',
-        'E',
-        'F',
-    };
-
-    std::string formatted;
-    formatted.reserve((a_bytes.size() * 3) - 1);
-
-    for (const auto byte : a_bytes) {
-        if (!formatted.empty()) {
-            formatted.push_back(' ');
-        }
-
-        const auto value = std::to_integer<unsigned>(byte);
-        formatted.push_back(hexDigits[(value >> 4) & 0xF]);
-        formatted.push_back(hexDigits[value & 0xF]);
-    }
-
-    return formatted;
+    const auto& models = a_manager.GetRuntimeData().loadedModels;
+    return models.empty() ? nullptr : models.back().itemBase;
 }
 
 void LogUnsupportedApplyRotationPrologue(const std::uintptr_t a_address, std::span<const std::byte> a_bytes) {
-    logger::error(
-        "Hooks: Inventory3DManager preview rotation hook skipped | reason=unsupportedPrologue | address={:X} | byteCount={} | bytes={}",
+    SKSE::log::error(
+        "Unsupported Inventory3DManager preview rotation prologue at {:X}: {}",
         a_address,
-        a_bytes.size(),
-        FormatBytes(a_bytes)
+        spdlog::to_hex(a_bytes.begin(), a_bytes.end())
     );
 }
 
-struct Inventory3DManager_ApplyRotation {
+struct RotationHook {
     [[nodiscard]] static bool Install() {
-        // SE:  Inventory3DManager preview rotation helper 50902 -> 140888C20.
-        // AE:  Inventory3DManager preview rotation helper 51778 -> 140928C40.
-        // GOG: Inventory3DManager preview rotation helper 51778 -> 14092AC80.
-        // VR:  Inventory3DManager preview rotation helper 1408B65F0.
-        REL::Relocation<std::byte*> target {REL::VariantID(50902, 51778, 0x8B65F0)};
+        REL::Relocation<std::byte*> const target {REL::VariantID(50902, 51778, 0x8B65F0)};
         const auto* targetBytes = target.get();
         const auto address = target.address();
         auto& trampoline = SKSE::GetTrampoline();
 
         if (REL::make_pattern<"E9">().match(address)) {
-            func = trampoline.write_branch<kExistingBranchPatchSize>(address, thunk);
+            func = trampoline.write_branch<kExistingBranchPatchSize>(address, Thunk);
 
-            logger::warn("Hooks: Inventory3DManager preview rotation hook chained | reason=existingBranch | branch=E9");
+            SKSE::log::info("Chained existing Inventory3DManager preview rotation hook");
             return true;
-        }
-
-        if (REL::Module::IsVR()) {
-            if (HookUtil::HasExpectedPrologue(targetBytes, kApplyRotationPrologueVR)) {
-                if (!HookUtil::HookFunctionPrologue<Inventory3DManager_ApplyRotation, kApplyRotationPatchSizeVR>(
-                        address,
-                        targetBytes
-                    )) {
-                    logger::error("Hooks: Inventory3DManager preview rotation hook skipped | reason=writeFailed");
-                    return false;
-                }
-
-                logger::info("Hooks: Inventory3DManager preview rotation hook installed");
-                return true;
-            }
-
-            LogUnsupportedApplyRotationPrologue(
-                address,
-                std::span<const std::byte> {targetBytes, kApplyRotationPatchSizeVR}
-            );
-            return false;
         }
 
         if (HookUtil::HasExpectedPrologue(targetBytes, kApplyRotationPrologueSE)
             || HookUtil::HasExpectedPrologue(targetBytes, kApplyRotationPrologueAEGOG)) {
-            if (!HookUtil::HookFunctionPrologue<Inventory3DManager_ApplyRotation, kApplyRotationPatchSize>(
-                    address,
-                    targetBytes
-                )) {
-                logger::error("Hooks: Inventory3DManager preview rotation hook skipped | reason=writeFailed");
+            if (!HookUtil::HookFunctionPrologue<RotationHook, kApplyRotationPatchSize>(address, targetBytes)) {
+                SKSE::log::error("Failed to write Inventory3DManager preview rotation hook");
                 return false;
             }
 
-            logger::info("Hooks: Inventory3DManager preview rotation hook installed");
+            SKSE::log::info("Installed Inventory3DManager preview rotation hook");
             return true;
         }
 
@@ -200,14 +130,15 @@ struct Inventory3DManager_ApplyRotation {
         return false;
     }
 
-    static void thunk(RE::Inventory3DManager* a_manager, RE::NiPoint2* a_rotationDelta) {
-        if (!a_manager || !InventoryPreviewRotation::ShouldHandle(*a_manager)) {
+    static void Thunk(RE::Inventory3DManager* a_manager, RE::NiPoint2* a_rotationDelta) {
+        if ((a_manager == nullptr) || !InventoryPreviewRotation::ShouldHandle(*a_manager)) {
             func(a_manager, a_rotationDelta);
             return;
         }
 
-        auto* loadedModel = GetCurrentLoadedModel(*a_manager);
-        const bool appliedSanitizedCenter = loadedModel && RotationBounds::ApplySanitizedRotationCenter(*loadedModel);
+        const auto* loadedModel = GetCurrentLoadedModel(*a_manager);
+        const bool appliedSanitizedCenter = (loadedModel != nullptr)
+                                            && RotationBounds::ApplySanitizedRotationCenter(*loadedModel);
 
         func(a_manager, a_rotationDelta);
 
@@ -216,26 +147,33 @@ struct Inventory3DManager_ApplyRotation {
         }
     }
 
-    static inline REL::Relocation<ApplyRotation_t> func;
+    static inline REL::Relocation<ApplyRotationFunction> func;
 };
 
 }
 
 void InventoryPreviewRotation::Install() {
-    if (!Inventory3DManager_ApplyRotation::Install()) {
-        logger::warn("Hooks: Inventory3DManager preview rotation hook unavailable. Using vanilla preview rotation");
+    // VR rotates a parent node and does not use the model bound as its pivot.
+    if (REL::Module::IsVR()) {
+        return;
+    }
+    if (!RotationHook::Install()) {
+        SKSE::log::warn("Preview centering hook unavailable. Using vanilla preview rotation");
     }
 }
 
 void InventoryPreviewRotation::Apply(RE::Inventory3DManager& a_manager, const RE::NiPoint2& a_rotationDelta) {
-    static REL::Relocation<ApplyRotation_t> applyRotation {REL::VariantID(50902, 51778, 0x8B65F0)};
+    static REL::Relocation<ApplyRotationFunction> const applyRotation {REL::VariantID(50902, 51778, 0x8B65F0)};
 
-    auto rotationDelta = a_rotationDelta;
-    applyRotation(&a_manager, &rotationDelta);
+    auto delta = a_rotationDelta;
+    applyRotation(&a_manager, &delta);
 }
 
 bool InventoryPreviewRotation::ShouldHandle(const RE::Inventory3DManager& a_manager) noexcept {
-    return a_manager.currentLightScheme
-           == RE::INTERFACE_LIGHT_SCHEME::kInventory
-           && HasInventoryObjectLoaded(a_manager);
+    if (a_manager.currentLightScheme != RE::INTERFACE_LIGHT_SCHEME::kInventory) {
+        return false;
+    }
+
+    const auto* itemBase = GetCurrentItemBase(a_manager);
+    return (itemBase != nullptr) && itemBase->IsInventoryObject();
 }

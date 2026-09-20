@@ -1,14 +1,16 @@
 #pragma once
 
+#include <RE/Skyrim.h> // IWYU pragma: keep
+#include <SKSE/SKSE.h>
+
+#include <REL/Relocation.h>
+#include <xbyak/xbyak.h>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-
-#include "REL/Relocation.h"
-#include "SKSE/SKSE.h"
-
-#include <xbyak/xbyak.h>
+#include <span>
 
 namespace HookUtil {
 inline constexpr std::size_t kAbsoluteJumpSize {0xE};
@@ -52,28 +54,24 @@ template <std::size_t BYTES, class F>
 template <class T, std::size_t BYTES>
 [[nodiscard]] bool HookFunctionPrologue(const std::uintptr_t a_src, const std::byte* a_originalBytes) {
     struct Patch : Xbyak::CodeGenerator {
-        Patch(
-            const std::uintptr_t a_originalFuncAddr,
-            const std::byte* a_originalBytes,
-            const std::size_t a_originalByteLength
-        ) {
-            for (::std::size_t i = 0; i < a_originalByteLength; ++i) {
-                db(::std::to_integer<::std::uint8_t>(a_originalBytes[i]));
+        Patch(const ::std::uintptr_t a_originalFuncAddr, ::std::span<const ::std::byte> a_originalBytes) {
+            for (const auto byte : a_originalBytes) {
+                db(::std::to_integer<::std::uint8_t>(byte));
             }
 
             jmp(ptr[rip]);
-            dq(a_originalFuncAddr + a_originalByteLength);
+            dq(a_originalFuncAddr + a_originalBytes.size());
         }
     };
 
-    Patch patch(a_src, a_originalBytes, BYTES);
+    Patch patch(a_src, {a_originalBytes, BYTES});
     patch.ready();
 
     auto& trampoline = SKSE::GetTrampoline();
     if constexpr (BYTES == 5 || BYTES == 6) {
-        trampoline.write_branch<BYTES>(a_src, T::thunk);
+        trampoline.write_branch<BYTES>(a_src, T::Thunk);
     } else {
-        if (!WriteAbsoluteJump<BYTES>(a_src, T::thunk, a_originalBytes)) {
+        if (!WriteAbsoluteJump<BYTES>(a_src, T::Thunk, a_originalBytes)) {
             return false;
         }
     }
