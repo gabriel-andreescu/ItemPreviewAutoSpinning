@@ -4,12 +4,18 @@ Manually spinning the preview takes precedence, dragging and letting go continue
 
 
 [size=4][color=#00ffff]COMPATIBILITY[/color][/size]
-Should be compatible with anything that doesn't also mess with the inventory item preview.
+Supports SE, Steam AE 1.6.1170 and 1.7.104, GOG AE, and VR. Other plugins that replace the same preview functions may conflict.
 This started as a joke, but if you actually use/like it and run into issues, let me know and I'll look into it.
 
 
 [size=4][color=#00ffff]CONFIGURATION[/color][/size]
-[quote]Data\SKSE\Plugins\ItemPreviewAutoSpinning.ini[/quote]
+You can edit the INI directly:
+
+[quote]Data\MCM\Settings\ItemPreviewAutoSpinning.ini[/quote]
+
+Restart Skyrim after changing the INI.
+
+Or use the optional MCM addon to change the settings in-game. Changes apply when you close the menu.
 
 [list]
 [*][b]Auto-spin speed[/b]: Controls the automatic preview spin. Negative values reverse the direction.[/*]
@@ -17,7 +23,13 @@ This started as a joke, but if you actually use/like it and run into issues, let
 [*][b]Release spin[/b]: Keeps the preview spinning briefly after you drag and let go.[/*]
 [*][b]Release spin duration[/b]: Controls how long the release spin takes to settle.[/*]
 [*][b]Release spin strength[/b]: Lets you make the release spin weaker or stronger.[/*]
+[*][b]Debug logging[/b]: Enables detailed logging for troubleshooting.[/*]
 [/list]
+
+
+[size=4][color=#00ffff]UPDATING TO 0.2.0[/color][/size]
+Settings have moved from [font=Courier New]Data\SKSE\Plugins\ItemPreviewAutoSpinning.ini[/font] to the MCM settings folder shown above. Launch the game once to create the new INI, then quit and copy over any values you changed.
+
 
 [size=4][color=#00ffff]REQUIREMENTS[/color][/size]
 SE/AE
@@ -26,6 +38,18 @@ SE/AE
 VR
 [url=https://www.nexusmods.com/skyrimspecialedition/mods/58101]Address Library for SKSEVR[/url]
 
+Optional MCM addon
+[url=https://www.nexusmods.com/skyrimspecialedition/mods/12604]SkyUI[/url] or [url=https://www.nexusmods.com/skyrimspecialedition/mods/91535]SkyUI - VR[/url]
+[url=https://www.nexusmods.com/skyrimspecialedition/mods/53000]MCM Helper[/url]
+
 
 [size=4][color=#00ffff]SOURCE[/color][/size]
 [url=https://github.com/gabriel-andreescu/ItemPreviewAutoSpinning]github.com/gabriel-andreescu/ItemPreviewAutoSpinning[/url]
+
+
+[size=4][color=#00ffff]CREDITS[/color][/size]
+[list]
+[*][url=https://github.com/alandtse/CommonLibSSE-NG]CommonLibSSE-NG[/url][/*]
+[*][url=https://github.com/powerof3/CLibUtil]CLibUtil[/url][/*]
+[*][url=https://www.nexusmods.com/skyrimspecialedition/mods/53000]MCM Helper[/url] - for the MCM addon[/*]
+[/list]
