@@ -7,8 +7,8 @@
 #include <limits>
 
 namespace {
-RE::NiBound Bound(float centerX, float radius) {
-    return {.center = {centerX, 0.0F, 0.0F}, .radius = radius};
+RE::NiBound Bound(float a_centerX, float a_radius) {
+    return {.center = {a_centerX, 0.0F, 0.0F}, .radius = a_radius};
 }
 }
 
@@ -75,7 +75,7 @@ TEST_CASE("Trimming preserves the geometry merge order", "[bounds]") {
         Bound(0.0F, 1.0F),
         Bound(10.0F, 1.0F),
         RE::NiBound {.center = {5.0F, 10.0F, 0.0F}, .radius = 1.0F},
-        Bound(100.0F, 150.0F)
+        Bound(100.0F, 150.0F),
     };
     const auto result = SelectRotationBound(Bound(0.0F, 1000.0F), samples);
     REQUIRE(result.has_value());
